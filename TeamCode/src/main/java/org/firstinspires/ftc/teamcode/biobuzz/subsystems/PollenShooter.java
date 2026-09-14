@@ -19,6 +19,7 @@ public class PollenShooter extends Subsystem {
     private double wantedSpeed;
     private double wantedHoodPos;
     private double wantedTurretAngle;
+    private double currentSpeed;
 
     public PollenShooter(HardwareMap hardwareMap) {
         shooterMotor = hardwareMap.get(DcMotorEx.class, PollenShooterConstants.SHOOTER_MOTOR_NAME);
@@ -41,7 +42,8 @@ public class PollenShooter extends Subsystem {
     public void periodic() {
         super.periodic();
 
-        double power = speedController.calculate(shooterMotor.getVelocity(), wantedSpeed);
+        currentSpeed = shooterMotor.getVelocity();
+        double power = speedController.calculate(currentSpeed, wantedSpeed);
         shooterMotor.setPower(MathUtil.clamp(power, 0, PollenShooterConstants.MAX_POWER));
         pitchServo.setPosition(MathUtil.clamp(wantedHoodPos, PollenShooterConstants.PITCH_SERVO_MIN, PollenShooterConstants.PITCH_SERVO_MAX));
         turretServo.setPosition(MathUtil.clamp(calculateWantedTurretPos(wantedTurretAngle), PollenShooterConstants.TURRET_SERVO_MIN, PollenShooterConstants.TURRET_SERVO_MAX));
@@ -77,5 +79,9 @@ public class PollenShooter extends Subsystem {
 
     public double getWantedHoodPos() {
         return wantedHoodPos;
+    }
+
+    public double getSpeedError() {
+        return wantedSpeed - currentSpeed;
     }
 }

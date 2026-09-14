@@ -1,5 +1,8 @@
 package org.firstinspires.ftc.teamcode.biobuzz.constants;
 
+import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Vector;
+
 public class PollenShooterConstants {
     public static String SHOOTER_MOTOR_NAME = "POLLEN_SHOOTER_MOTOR";
     public static String PITCH_SERVO_NAME = "POLLEN_PITCH_SERVO";
@@ -13,4 +16,7 @@ public class PollenShooterConstants {
     public static double PITCH_SERVO_MAX = 0.8;
     public static double TURRET_SERVO_MIN = 0.1;
     public static double TURRET_SERVO_MAX = 0.9;
+    public static double FLOWER_HOOD_POS = 0.67;
+    public static double FLOWER_WHEEL_SPEED = 300;
+    public static Pose TURRET_TRANSLATION = new Pose(-3, 4);
 }
