@@ -8,12 +8,14 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.biobuzz.CurrentRobot;
 import org.firstinspires.ftc.teamcode.biobuzz.commands.ShootCommand;
+import org.firstinspires.ftc.teamcode.biobuzz.constants.DrivetrainConstants;
 import org.firstinspires.ftc.teamcode.biobuzz.constants.FieldConstants;
 import org.firstinspires.ftc.teamcode.biobuzz.constants.NectarShooterConstants;
 import org.firstinspires.ftc.teamcode.biobuzz.constants.PollenShooterConstants;
 import org.firstinspires.ftc.teamcode.biobuzz.constants.ShootingConstants;
 import org.firstinspires.ftc.teamcode.lib.Alliance;
 import org.firstinspires.ftc.teamcode.lib.robot.CommandScheduler;
+import org.firstinspires.ftc.teamcode.lib.zones.IouZoneGuide;
 import org.firstinspires.ftc.teamcode.util.SOTMUtil;
 
 public class MainTeleop {
@@ -27,6 +29,10 @@ public class MainTeleop {
     public MainTeleop(Pose startPose, Alliance alliance, HardwareMap hardwareMap, Telemetry telemetry, Gamepad gamepad1, Gamepad gamepad2) {
         robot = new CurrentRobot(hardwareMap, alliance);
         robot.drivetrain.follower.setStartingPose(startPose);
+        robot.drivetrain.setGuide(new IouZoneGuide(
+                FieldConstants.PUSH_ZONES,
+                FieldConstants.ROBOT_WIDTH, FieldConstants.ROBOT_LENGTH,
+                () -> DrivetrainConstants.MIN_ZONE_IOU));
         this.telemetry = telemetry;
         this.gamepad1 = gamepad1;
         this.gamepad2 = gamepad2;
@@ -115,6 +121,7 @@ public class MainTeleop {
 
         telemetry.addData("Pose", currentPose);
         telemetry.addData("Velocity", currentVelocity);
+        telemetry.addData("Guide", robot.drivetrain.getGuideTargets());
         telemetry.update();
     }
 }

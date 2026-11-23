@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.biobuzz.subsystems;
 
 import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.Pose;
 import com.pedropathing.math.MathFunctions;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
@@ -8,6 +9,8 @@ import org.firstinspires.ftc.teamcode.biobuzz.constants.DrivetrainConstants;
 import org.firstinspires.ftc.teamcode.lib.Alliance;
 import org.firstinspires.ftc.teamcode.lib.controllers.WeightedSetpointPIDController;
 import org.firstinspires.ftc.teamcode.lib.robot.Subsystem;
+import org.firstinspires.ftc.teamcode.lib.zones.DriveGuide;
+import org.firstinspires.ftc.teamcode.lib.zones.GuideTargets;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.util.MathUtil;
 
@@ -19,6 +22,9 @@ public class Drivetrain extends Subsystem {
 
     public boolean xLocked, yLocked, headingLocked;
     private double lockedX, lockedY, lockedHeading;
+
+    private DriveGuide guide;
+    private GuideTargets guideTargets = GuideTargets.NONE;
 
     // BLUE and RED driver stations face opposite directions across a mirrored field, so
     // "stick forward" corresponds to a different fixed field angle per alliance.
@@ -67,6 +73,15 @@ public class Drivetrain extends Subsystem {
     public void unlockHeading() { headingLocked = false; }
     public void unlockAll() { xLocked = yLocked = headingLocked = false; }
 
+    /** Soft-guides unlocked axes toward the guide's targets; null disables guiding. */
+    public void setGuide(DriveGuide guide) {
+        this.guide = guide;
+    }
+
+    public GuideTargets getGuideTargets() {
+        return guideTargets;
+    }
+
     public boolean atXTarget(double tolerance) {
         return !xLocked || Math.abs(follower.getPose().getX() - lockedX) < tolerance;
     }
@@ -88,34 +103,49 @@ public class Drivetrain extends Subsystem {
             return;
         }
 
-        double heading = follower.getPose().getHeading();
+        Pose pose = follower.getPose();
+        double heading = pose.getHeading();
+        guideTargets = guide == null ? GuideTargets.NONE : guide.getTargets(pose);
 
         double manualX = driveX * DrivetrainConstants.MOVEMENT_SPEED_MULTIPLIER;
         double manualY = driveY * DrivetrainConstants.MOVEMENT_SPEED_MULTIPLIER;
         double manualTurn = driveTurn * DrivetrainConstants.TURN_SPEED_MULTIPLIER;
 
-        double xPidOutput = xLocked
-                ? MathUtil.clamp(xController.calculate(follower.getPose().getX(), lockedX), -1, 1)
+        // explicit locks win (manual weight 0), then guide targets (partial weight), else free (1)
+        Double targetX = xLocked ? Double.valueOf(lockedX) : guideTargets.x;
+        Double targetY = yLocked ? Double.valueOf(lockedY) : guideTargets.y;
+        Double targetHeading = headingLocked ? Double.valueOf(lockedHeading) : guideTargets.heading;
+        double xWeight = manualWeight(xLocked, targetX, DrivetrainConstants.GUIDE_WEIGHT_X);
+        double yWeight = manualWeight(yLocked, targetY, DrivetrainConstants.GUIDE_WEIGHT_Y);
+        double headingWeight = manualWeight(headingLocked, targetHeading, DrivetrainConstants.GUIDE_WEIGHT_HEADING);
+
+        double xPidOutput = targetX != null
+                ? MathUtil.clamp(xController.calculate(pose.getX(), targetX), -1, 1)
                 : 0;
-        double yPidOutput = yLocked
-                ? MathUtil.clamp(yController.calculate(follower.getPose().getY(), lockedY), -1, 1)
+        double yPidOutput = targetY != null
+                ? MathUtil.clamp(yController.calculate(pose.getY(), targetY), -1, 1)
                 : 0;
         double headingPidOutput = 0;
-        if (headingLocked) {
-            double headingError = MathFunctions.getTurnDirection(heading, lockedHeading)
-                    * MathFunctions.getSmallestAngleDifference(heading, lockedHeading);
+        if (targetHeading != null) {
+            double headingError = MathFunctions.getTurnDirection(heading, targetHeading)
+                    * MathFunctions.getSmallestAngleDifference(heading, targetHeading);
             headingPidOutput = MathUtil.clamp(headingController.calculate(0, headingError), -1, 1);
         }
 
         double[] powers = computeDrivePowers(
                 heading, allianceHeadingOffset, robotCentric,
                 manualX, manualY, manualTurn,
-                xLocked, xPidOutput,
-                yLocked, yPidOutput,
-                headingLocked, headingPidOutput
+                xWeight, xPidOutput,
+                yWeight, yPidOutput,
+                headingWeight, headingPidOutput
         );
 
         follower.setTeleOpDrive(powers[0], powers[1], powers[2], true);
+    }
+
+    private static double manualWeight(boolean locked, Double target, double guideWeight) {
+        if (locked) return 0;
+        return target != null ? guideWeight : 1;
     }
 
     /**
@@ -123,22 +153,24 @@ public class Drivetrain extends Subsystem {
      * invariant) with manual joystick input (rotated into field frame by the live heading in
      * robot-centric mode, or by the fixed alliance offset in field-centric mode), then rotates
      * the combined field-frame vector into robot frame for {@code Follower#setTeleOpDrive}.
+     * Each axis mixes as {@code (1-w)*pid + w*manual}: w=0 is a hard lock, w=1 is pure manual,
+     * anything between is a soft guide.
      * Extracted as a static pure function (no Follower/hardware access) so it's unit-testable.
      */
     static double[] computeDrivePowers(
             double heading, double allianceHeadingOffset, boolean robotCentric,
             double manualX, double manualY, double manualTurn,
-            boolean xLocked, double xPidOutput,
-            boolean yLocked, double yPidOutput,
-            boolean headingLocked, double headingPidOutput
+            double xManualWeight, double xPidOutput,
+            double yManualWeight, double yPidOutput,
+            double headingManualWeight, double headingPidOutput
     ) {
         double manualRotation = robotCentric ? heading : allianceHeadingOffset;
         double fieldManualX = manualX * Math.cos(manualRotation) - manualY * Math.sin(manualRotation);
         double fieldManualY = manualX * Math.sin(manualRotation) + manualY * Math.cos(manualRotation);
 
-        double fieldX = xLocked ? xPidOutput : fieldManualX;
-        double fieldY = yLocked ? yPidOutput : fieldManualY;
-        double turn = headingLocked ? headingPidOutput : manualTurn;
+        double fieldX = (1 - xManualWeight) * xPidOutput + xManualWeight * fieldManualX;
+        double fieldY = (1 - yManualWeight) * yPidOutput + yManualWeight * fieldManualY;
+        double turn = (1 - headingManualWeight) * headingPidOutput + headingManualWeight * manualTurn;
 
         double robotX = fieldX * Math.cos(-heading) - fieldY * Math.sin(-heading);
         double robotY = fieldX * Math.sin(-heading) + fieldY * Math.cos(-heading);

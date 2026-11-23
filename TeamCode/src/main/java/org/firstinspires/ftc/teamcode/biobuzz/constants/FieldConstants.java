@@ -2,7 +2,12 @@ package org.firstinspires.ftc.teamcode.biobuzz.constants;
 
 import com.pedropathing.geometry.Pose;
 
+import org.firstinspires.ftc.teamcode.lib.zones.HeadingTarget;
+import org.firstinspires.ftc.teamcode.lib.zones.Zone;
 import org.firstinspires.ftc.teamcode.util.FlipUtil;
+
+import java.util.Arrays;
+import java.util.List;
 
 public class FieldConstants {
     public static String END_POSE_KEY = "END_POSE";
@@ -19,4 +24,25 @@ public class FieldConstants {
 
     public static Pose RED_CLOSE_START_POSE = new Pose(FIELD_WIDTH * (2/6d) + ROBOT_WIDTH / 2, ROBOT_LENGTH / 2, Math.toRadians(90));
     public static Pose RED_FAR_START_POSE = new Pose(FIELD_WIDTH * (2/6d) + ROBOT_WIDTH / 2, FIELD_WIDTH - ROBOT_LENGTH / 2, Math.toRadians(-90));
+
+    // Guide zones: a pair straddles each of the lines x = 1/3 and x = 2/3 of the field. The zone on
+    // the left of a line pushes the robot left of it, the one on the right pushes it right.
+    // Same for both alliances (symmetric about the field center).
+    public static double ZONE_WIDTH = 10d;
+    public static double ZONE_HEIGHT = 60d;
+    public static double ZONE_PUSH_MARGIN = 0d;
+    public static List<Zone> PUSH_ZONES = Arrays.asList(
+            pushLeftOf(FIELD_WIDTH / 3), pushRightOf(FIELD_WIDTH / 3),
+            pushLeftOf(FIELD_WIDTH * 2 / 3), pushRightOf(FIELD_WIDTH * 2 / 3)
+    );
+
+    private static Zone pushLeftOf(double lineX) {
+        return Zone.pushX(lineX - ZONE_WIDTH / 2, FIELD_WIDTH / 2, ZONE_WIDTH, ZONE_HEIGHT,
+                lineX - ROBOT_WIDTH / 2 - ZONE_PUSH_MARGIN, HeadingTarget.nearest90());
+    }
+
+    private static Zone pushRightOf(double lineX) {
+        return Zone.pushX(lineX + ZONE_WIDTH / 2, FIELD_WIDTH / 2, ZONE_WIDTH, ZONE_HEIGHT,
+                lineX + ROBOT_WIDTH / 2 + ZONE_PUSH_MARGIN, HeadingTarget.nearest90());
+    }
 }
